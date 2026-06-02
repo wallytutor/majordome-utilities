@@ -1,5 +1,7 @@
 use std::fmt;
 
+// ---------------------------------------------------------------------------
+
 pub fn dedent(s: &str) -> String {
     let lines: Vec<&str> = s.lines().collect();
 
@@ -29,6 +31,8 @@ pub fn dedent(s: &str) -> String {
         .join("\n")
 }
 
+// ---------------------------------------------------------------------------
+
 /// A float wrapper that prints in scientific notation with:
 /// - configurable total width and precision
 /// - controlled exponent width and total width
@@ -46,10 +50,10 @@ impl fmt::Display for SciFmt {
         let raw = format!("{:.*e}", self.precision, self.value);
 
         // 2) Split mantissa and exponent
-        let (mant, exp) = raw.split_once('e').unwrap();
+        let (mant, exp) = raw.split_once('e').ok_or(fmt::Error)?;
 
         // 3) Parse exponent and reformat with +02 / -05 / +10
-        let exp_val: i32 = exp.parse().unwrap();
+        let exp_val: i32 = exp.parse().map_err(|_| fmt::Error)?;
         let exp_fixed = format!("{:+0width$}", exp_val, width = 1 + self.exponent_width);
 
         // 4) Reassemble
@@ -75,3 +79,5 @@ pub fn exponential_fmt(value: f64) -> String {
     };
     fmt.to_string()
 }
+
+// ---------------------------------------------------------------------------

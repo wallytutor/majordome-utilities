@@ -1,6 +1,8 @@
 use std::io::Write;
 use std::process::{Child, Command, Stdio};
 
+// ---------------------------------------------------------------------------
+
 #[derive(Debug)]
 pub enum OsPlatform {
     Windows,
@@ -21,13 +23,15 @@ pub fn get_os_platform() -> OsPlatform {
     }
 }
 
-pub fn executable_name() -> &'static str {
+pub fn executable_name() -> Result<&'static str, &'static str> {
     match get_os_platform() {
-        OsPlatform::Windows => "gnuplot.exe",
-        OsPlatform::Linux | OsPlatform::Osx => "gnuplot",
-        OsPlatform::Unknown => panic!("not supported OS"),
+        OsPlatform::Windows => Ok("gnuplot.exe"),
+        OsPlatform::Linux | OsPlatform::Osx => Ok("gnuplot"),
+        OsPlatform::Unknown => Err("not supported OS"),
     }
 }
+
+// ---------------------------------------------------------------------------
 
 pub struct LineStyle {
     pub color: String,
@@ -45,43 +49,53 @@ impl LineStyle {
     }
 }
 
+// ---------------------------------------------------------------------------
+
 pub struct GnuplotInteractive {
     child: Option<Child>,
 }
 
+impl Default for GnuplotInteractive {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl GnuplotInteractive {
     pub fn new() -> Self {
-        let exe = executable_name();
         let mut child = None;
 
-        match Command::new(exe)
-            .arg("-persist")
-            .stdin(Stdio::piped())
-            .stderr(Stdio::inherit())
-            .spawn()
-        {
-            Ok(c) => child = Some(c),
-            Err(e) => eprintln!("Failed to start gnuplot ({}): {}", exe, e),
+        match executable_name() {
+            Ok(exe) => {
+                match Command::new(exe)
+                    .arg("-persist")
+                    .stdin(Stdio::piped())
+                    .stderr(Stdio::inherit())
+                    .spawn()
+                {
+                    Ok(c) => child = Some(c),
+                    Err(e) => eprintln!("Failed to start gnuplot ({}): {}", exe, e),
+                }
+            }
+            Err(e) => eprintln!("Failed to start gnuplot: {}", e),
         }
 
         Self { child }
     }
 
     pub fn write(&mut self, command: &str) {
-        if let Some(ref mut child) = self.child {
-            if let Some(ref mut stdin) = child.stdin {
-                let mut cmd = command.to_string();
+        if let Some(stdin) = self.child.as_mut().and_then(|c| c.stdin.as_mut()) {
+            let mut cmd = command.to_string();
 
-                if !cmd.ends_with('\n') {
-                    cmd.push('\n');
-                }
-
-                if let Err(e) = stdin.write_all(cmd.as_bytes()) {
-                    eprintln!("Error writing to gnuplot: {}", e);
-                }
-
-                let _ = stdin.flush();
+            if !cmd.ends_with('\n') {
+                cmd.push('\n');
             }
+
+            if let Err(e) = stdin.write_all(cmd.as_bytes()) {
+                eprintln!("Error writing to gnuplot: {}", e);
+            }
+
+            let _ = stdin.flush();
         }
     }
 
@@ -131,3 +145,5 @@ impl Drop for GnuplotInteractive {
         }
     }
 }
+
+// ---------------------------------------------------------------------------
